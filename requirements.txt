@@ -1,0 +1,8 @@
+openai
+psutil
+pynput
+watchdog
+sounddevice
+soundfile
+whisper
+tk
