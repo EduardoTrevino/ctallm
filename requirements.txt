@@ -6,3 +6,4 @@ sounddevice
 soundfile
 whisper
 tk
+mediapipe
