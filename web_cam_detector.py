@@ -5,30 +5,41 @@ import time
 # Global cascade classifiers (loaded once)
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 profile_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_profileface.xml')
+lbp_profile_cascade = cv2.CascadeClassifier(cv2.data.lbpcascades + 'lbpcascade_profileface.xml')
 upperbody_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_upperbody.xml')
 
 # Function to detect if a human is present using multiple cascades
 def detect_human(frame):
     # Convert frame to grayscale
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    # Equalize histogram for better contrast in varying lighting
+    gray = cv2.equalizeHist(gray)
     
     # Detect frontal faces
-    frontal_faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+    frontal_faces = face_cascade.detectMultiScale(gray, scaleFactor=1.05, minNeighbors=5, minSize=(30, 30))
     
-    # Detect profile faces
-    profile_faces = profile_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+    # Detect profile faces (Haar)
+    profile_faces = profile_cascade.detectMultiScale(gray, scaleFactor=1.05, minNeighbors=3, minSize=(30, 30))
     
-    # Flip the image horizontally and detect profile on the other side
+    # Flip the image horizontally and detect profile on the other side (Haar)
     flipped_gray = cv2.flip(gray, 1)
-    profile_faces_flipped = profile_cascade.detectMultiScale(flipped_gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+    profile_faces_flipped = profile_cascade.detectMultiScale(flipped_gray, scaleFactor=1.05, minNeighbors=3, minSize=(30, 30))
+    
+    # Detect profile faces (LBP)
+    lbp_profile_faces = lbp_profile_cascade.detectMultiScale(gray, scaleFactor=1.05, minNeighbors=3, minSize=(30, 30))
+    
+    # Flip and detect LBP profile on the other side
+    lbp_profile_faces_flipped = lbp_profile_cascade.detectMultiScale(flipped_gray, scaleFactor=1.05, minNeighbors=3, minSize=(30, 30))
     
     # Detect upper body as fallback
-    upper_bodies = upperbody_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=3, minSize=(60, 60))
+    upper_bodies = upperbody_cascade.detectMultiScale(gray, scaleFactor=1.05, minNeighbors=3, minSize=(60, 60))
     
     # Return True if any detection is found
     return (len(frontal_faces) > 0 or 
             len(profile_faces) > 0 or 
             len(profile_faces_flipped) > 0 or 
+            len(lbp_profile_faces) > 0 or 
+            len(lbp_profile_faces_flipped) > 0 or 
             len(upper_bodies) > 0)
 
 # Main function to handle webcam capture and logging
@@ -44,12 +55,12 @@ def main():
     human_present = False
     
     # Debounce counters to prevent flickering (require consistent detections)
-    presence_threshold = 3  # Frames to confirm presence
-    absence_threshold = 5   # Frames to confirm absence (higher to avoid false negatives)
+    presence_threshold = 3   # Frames to confirm presence
+    absence_threshold = 10   # Increased for fewer false absences
     presence_counter = 0
     absence_counter = 0
     
-    print("Starting webcam human detection (multi-cascade for robustness). Press 'q' to quit.")
+    print("Starting webcam human detection (enhanced multi-cascade with LBP and equalization). Press 'q' to quit.")
     
     while True:
         # Capture frame-by-frame
@@ -87,27 +98,38 @@ def main():
         
         # For visualization: Draw bounding boxes for all detections
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        gray = cv2.equalizeHist(gray)
         flipped_gray = cv2.flip(gray, 1)
         
         # Frontal faces (blue)
-        frontal_faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+        frontal_faces = face_cascade.detectMultiScale(gray, scaleFactor=1.05, minNeighbors=5, minSize=(30, 30))
         for (x, y, w, h) in frontal_faces:
             cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
         
-        # Profile faces (green)
-        profile_faces = profile_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+        # Haar Profile faces (green)
+        profile_faces = profile_cascade.detectMultiScale(gray, scaleFactor=1.05, minNeighbors=3, minSize=(30, 30))
         for (x, y, w, h) in profile_faces:
             cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
         
-        # Profile faces on flipped (adjust coordinates, green)
-        profile_faces_flipped = profile_cascade.detectMultiScale(flipped_gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+        # Haar Profile faces on flipped (green)
+        profile_faces_flipped = profile_cascade.detectMultiScale(flipped_gray, scaleFactor=1.05, minNeighbors=3, minSize=(30, 30))
         for (x, y, w, h) in profile_faces_flipped:
-            # Adjust x-coordinate for flip
             adj_x = frame.shape[1] - (x + w)
             cv2.rectangle(frame, (adj_x, y), (adj_x + w, y + h), (0, 255, 0), 2)
         
+        # LBP Profile faces (yellow)
+        lbp_profile_faces = lbp_profile_cascade.detectMultiScale(gray, scaleFactor=1.05, minNeighbors=3, minSize=(30, 30))
+        for (x, y, w, h) in lbp_profile_faces:
+            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 255), 2)
+        
+        # LBP Profile faces on flipped (yellow)
+        lbp_profile_faces_flipped = lbp_profile_cascade.detectMultiScale(flipped_gray, scaleFactor=1.05, minNeighbors=3, minSize=(30, 30))
+        for (x, y, w, h) in lbp_profile_faces_flipped:
+            adj_x = frame.shape[1] - (x + w)
+            cv2.rectangle(frame, (adj_x, y), (adj_x + w, y + h), (0, 255, 255), 2)
+        
         # Upper bodies (red)
-        upper_bodies = upperbody_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=3, minSize=(60, 60))
+        upper_bodies = upperbody_cascade.detectMultiScale(gray, scaleFactor=1.05, minNeighbors=3, minSize=(60, 60))
         for (x, y, w, h) in upper_bodies:
             cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 0, 255), 2)
         
